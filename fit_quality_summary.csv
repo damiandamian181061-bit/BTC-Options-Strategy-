@@ -1,0 +1,4 @@
+model,iv_rmse_vol_pts
+Bates,0.125
+Heston,1.2
+Black-Scholes,2.219
