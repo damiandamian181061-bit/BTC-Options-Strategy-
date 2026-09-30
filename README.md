@@ -178,23 +178,6 @@ convention switching from put deltas (negative) to call deltas (positive)
 at that strike, consistent with put-call parity (delta_call − delta_put =
 1 at the same strike).
 
-## Suggested CV framing
-
-> Built and calibrated Heston and Bates stochastic-volatility models to
-> price BTC calls and puts via characteristic-function inversion,
-> benchmarked against Black-Scholes; reduced implied-vol RMSE by >90%
-> versus flat Black-Scholes, computed and validated Greeks (delta, gamma,
-> theta, vega) via finite-difference bumping for all three models, and
-> identified a parameter-identification limitation in jump-component
-> calibration from cross-sectional data alone.
-
-Keep the one-liner on the CV; keep this README (or a short write-up drawn
-from it) as the backing detail for when someone asks about it in an
-interview — the honest "here's where the model breaks down" paragraph
-above is exactly the kind of thing that tends to land well when a quant
-recruiter or hiring manager probes further, since it shows you understand
-the model's limits rather than just running someone else's formula.
-
 ## Real-data results (Deribit)
 
 The `main.py` results above use synthetic data (this project's own sandbox
