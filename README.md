@@ -1,20 +1,19 @@
 # BTC Options: Black-Scholes vs Heston vs Bates
 
 A calibration study comparing three option-pricing models against a BTC
-implied volatility surface: flat Black-Scholes, Heston (stochastic
-volatility), and Bates (stochastic volatility + jumps).
+implied volatility surface which includes flat Black-Scholes, Heston (stochastic
+volatility), and Bates (stochastic volatility + jumps). The synthetic options data is then 
+compared with real Options data over time to find the difference. 
 
-## Why this comparison
+## Why this comparison and the Objective
 
 Black-Scholes assumes constant volatility and continuous price paths.
-Neither holds for BTC: volatility clusters and mean-reverts (calm periods,
-then violent ones), and prices move discontinuously on exchange incidents,
+Neither holds for BTC: volatility clusters, mean-reverts and prices move discontinuously on exchange incidents,
 regulatory news, and liquidation cascades. Heston relaxes the constant-vol
-assumption; Bates adds jumps on top. The question this project answers:
-**does that added complexity actually buy a better fit to the market, and
-is it worth the extra calibration difficulty?**
+assumption; Bates adds jumps on top. The Objective:
+**test whether option-pricing models like Heston and Bates actually explain real Bitcoin options prices better than the standard one Black-Scholes, and by how much using real market data.**
 
-## Method
+## Method for Synthetic Data
 
 1. **Pricing engines** (`models/`): closed-form Black-Scholes, and
    semi-analytic Heston / Bates pricers via characteristic-function
@@ -78,29 +77,23 @@ across all three maturities.
    (Bates 1996): a real fitting exercise, not just a synthetic one, often
    reproduces this same pattern on short-dated crypto or equity index
    skew.
-2. **Bates' own jump parameters are still not cleanly recovered**
+2. **Bates' own jump parameters are still not cleanly recovered** 
    (calibrated λ ≈ 0.20 vs. true 0.6, μⱼ ≈ -0.16 vs. true -0.06), even
    though the *overall* price/smile fit is excellent and the diffusion
    parameters (kappa, theta) land close to their true values. This is a
    known identification problem in jump-diffusion calibration: stochastic
    volatility and jump risk both add left-skew and excess kurtosis to the
    implied distribution, so a cross-sectional snapshot of option prices
-   alone often can't cleanly separate "how much of this skew is vol-of-vol
-   vs. how much is jump risk" — different parameter combinations can
+   alone often can't cleanly separate how much of this skew is vol-of-vol
+   vs. how much is jump risk — different parameter combinations can
    produce nearly identical option prices. Resolving it properly needs
    either time-series data (to see actual jumps happen) or a much denser
    strike/maturity grid.
 
-The headline result (Bates fits best, Black-Scholes fits worst) is the
-expected, presentable one. The two findings above are the more
-interesting ones for an interview: they show the fitting procedure is
-being interrogated rather than trusted blindly.
-
 ## Using real data instead of the synthetic market
 
-This sandbox has no general internet access, so the project ships with a
-synthetic (but realistically-generated) market by default. To run it on a
-live BTC snapshot (calls and puts), on a machine with normal internet
+The project ships with a realistically synthetic generated market by default. To
+run it on a live BTC snapshot (calls and puts), on a machine with normal internet
 access:
 
 ```bash
@@ -108,15 +101,7 @@ pip install -r requirements.txt
 python3 run_on_real_data.py
 ```
 
-That's it — `fetch_deribit_market()` in `data.py` pulls the live chain, no
-API key needed, parses each instrument's expiry into time-to-maturity,
-filters to a sensible 1–180 day window, and returns data in the exact
-shape `main.py` expects, so calibration and plotting just work. It saves
-`smile_comparison_live.png`, `fit_quality_summary_live.csv`, and the raw
-snapshot as `deribit_snapshot.csv` (handy if you want to send it somewhere
-else for calibration, or back to me).
-
-## Limitations (worth stating explicitly, not hiding)
+## Limitations (Synthetic Data)
 
 - Calibrated on a single snapshot in time (a "cross-section"), not a time
   series — this is standard for model comparison but can't validate how
@@ -147,11 +132,10 @@ code path handles all three.
 **Validated before trusting it on Heston/Bates**: I checked the
 finite-difference delta/gamma/vega against Black-Scholes' own closed-form
 formulas — they match to 9 significant figures. Theta matches to within
-0.3%, which is *expected*, not an error: the finite-difference version
+0.3%, which is *expected*. The finite-difference version
 measures actual next-day P&L (including one day of curvature), while the
 closed-form formula is an instantaneous derivative — the discrete version
-is arguably the more practically useful number anyway ("what do I lose
-overnight"), not a less accurate one.
+is arguably the more practically useful number
 
 **Definitions used** (Greek conventions vary across desks — stating them
 explicitly matters more than which convention you pick):
