@@ -121,13 +121,12 @@ python3 run_on_real_data.py
 
 `greeks.py` computes all four via finite-difference bumping (nudge spot,
 time, or vol slightly and reprice), the same way for all three models —
-which is itself the point worth stating in a write-up: **Black-Scholes has
-closed-form Greek formulas; Heston and Bates don't**, because Heston alone
-has five vol-related parameters (v0, kappa, theta, sigma_v, rho), so
-there's no single "sigma" to differentiate against the way Black-Scholes
-has one. Bump-and-reprice is the standard way to get Greeks out of a model
-that doesn't have a closed form, and it's model-agnostic — the exact same
-code path handles all three.
+which shows that **Black-Scholes has closed-form Greek formulas; Heston
+and Bates don't**, because Heston alone has five vol-related parameters
+(v0, kappa, theta, sigma_v, rho), so there's no single "sigma" to
+differentiate against the way Black-Scholes has one. Bump-and-reprice is
+the standard way to get Greeks out of a model that doesn't have a closed 
+form.
 
 **Validated before trusting it on Heston/Bates**: I checked the
 finite-difference delta/gamma/vega against Black-Scholes' own closed-form
