@@ -62,7 +62,7 @@ see `smile_comparison.png`: it's a flat line cutting through a clearly
 downward-sloping market skew. Bates tracks the market skew almost exactly
 across all three maturities.
 
-**Two findings worth flagging explicitly rather than glossing over:**
+**Two findings that were flagged:**
 
 1. **Heston's calibration converges to a boundary solution** — kappa and
    theta both pin near their lower search bounds, and rho pins near -1,
