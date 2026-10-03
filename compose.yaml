@@ -1,0 +1,81 @@
+name: btc-options
+x-platform: &platform
+  image: btc-options-platform:local
+  pull_policy: never
+  init: true
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 45s
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  dashboard:
+    <<: *platform
+    build: .
+    command: [dashboard]
+    environment:
+      BTC_RUNTIME_DIR: /data
+      BTC_MANAGED_STACK: "1"
+    ports:
+      - "127.0.0.1:${BTC_UI_PORT:-8765}:8765"
+    volumes:
+      - paper-data:/data
+    healthcheck:
+      test: [CMD, python, -m, btc_options.container, health, dashboard]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+  collector:
+    <<: *platform
+    command: [collector]
+    environment:
+      BTC_RUNTIME_DIR: /data
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    volumes:
+      - type: volume
+        source: paper-data
+        target: /data
+        volume:
+          nocopy: true
+    healthcheck:
+      test: [CMD, python, -m, btc_options.container, health, collector]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+  paper:
+    <<: *platform
+    command: [paper]
+    environment:
+      BTC_RUNTIME_DIR: /data
+      BTC_PAPER_BALANCE: ${BTC_PAPER_BALANCE:-10000}
+      # Only the Jev key is passed through from .env; exchange credentials are not.
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+    depends_on:
+      collector:
+        condition: service_healthy
+    volumes:
+      - type: volume
+        source: paper-data
+        target: /data
+        volume:
+          nocopy: true
+    healthcheck:
+      test: [CMD, python, -m, btc_options.container, health, paper]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+volumes:
+  paper-data:

@@ -1,0 +1,17 @@
+.git
+.venv
+.cache
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+runtime
+dist
+frontend/node_modules
+frontend/dist
+secrets
+*.csv
+*.png
+*.pdf

@@ -1,0 +1,57 @@
+name: Platform checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  python:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun run build
+        working-directory: frontend
+      - run: uv sync --locked
+      - run: uv run ruff check src tests
+      - run: uv run pytest
+      - run: uv build
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - run: docker compose config --quiet
+      - run: docker compose build dashboard
+      - run: docker compose up --no-build --detach --wait dashboard
+      - name: Check packaged UI and safe startup
+        run: |
+          curl --fail http://127.0.0.1:8765/api/health
+          curl --fail http://127.0.0.1:8765/ | grep 'app'
+          docker compose exec -T dashboard python -c 'import json, urllib.request; s=json.load(urllib.request.urlopen("http://127.0.0.1:8765/api/setup")); assert s["managed"] is True; assert s["history"]["ready"] is False'
+          docker compose exec -T dashboard python -c 'from pathlib import Path; import btc_options; a=Path(btc_options.__file__).parent/"frontend_dist"; b=Path("/app/frontend/dist"); assert all((a/p.relative_to(b)).read_bytes()==p.read_bytes() for p in b.rglob("*") if p.is_file())'
+      - if: always()
+        run: docker compose logs --tail 100
+      - if: always()
+        run: docker compose down
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run build

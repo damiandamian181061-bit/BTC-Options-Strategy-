@@ -1,0 +1,7 @@
+# Copy to a separate testnet/live configuration and select capital deliberately.
+mode = "testnet"
+runtime_dir = "runtime/exchange"
+jev_mode = "shadow"
+jev_model = "jev-1.13.0"
+# strategy_capital = <YOUR_ALLOCATED_USDC>   # Required; no automatic capital choice.
+# CLI --arm is still required. Live also requires validated release evidence.

@@ -1,0 +1,32 @@
+mode = "paper"
+runtime_dir = "runtime"
+paper_balance = 10000.0
+jev_mode = "shadow"
+jev_model = "jev-1.13.0"
+evaluation_seconds = 300
+max_quote_age_seconds = 15
+latency_ms = 250
+fee_rate = 0.0003
+fee_premium_cap = 0.125
+delivery_fee_rate = 0.00015
+# Conservative fee assumptions; live mode verifies the account's effective fees.
+min_expiry_days = 14
+max_expiry_days = 45
+short_delta_min = 0.10
+short_delta_max = 0.20
+max_holding_hours = 24
+take_profit_fraction = 0.50
+stop_credit_multiple = 2.0
+min_forecast_days = 60
+event_calendar = ""
+
+[risk]
+per_trade = 0.0025
+aggregate = 0.01
+daily_loss = 0.01
+drawdown = 0.10
+max_positions = 1
+margin_utilization = 0.20
+delta_notional = 0.10
+vega_fraction = 0.01
+

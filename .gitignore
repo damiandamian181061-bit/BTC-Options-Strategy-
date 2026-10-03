@@ -1,0 +1,16 @@
+.venv/
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.env
+secrets/
+paper-backup/
+paper-export/
+runtime/
+dist/
+*.egg-info/
+.streamlit/secrets.toml
+frontend/node_modules/
+frontend/dist/
