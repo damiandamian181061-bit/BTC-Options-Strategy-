@@ -30,7 +30,7 @@ packages = ["src/btc_options"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--basetemp=.cache/pytest"
+addopts = "--basetemp=.pytest_tmp"
 asyncio_mode = "auto"
 
 [tool.ruff]
