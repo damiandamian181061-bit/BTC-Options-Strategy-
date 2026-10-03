@@ -1,270 +1,140 @@
-# BTC Options: Black-Scholes vs Heston vs Bates
+# BTC Options Platform
 
-A calibration study comparing three option-pricing models against a BTC
-implied volatility surface which includes flat Black-Scholes, Heston (stochastic
-volatility), and Bates (stochastic volatility + jumps). The synthetic options data is then 
-compared with real Options data over time to find the difference. 
+Python 3.12 managed by **uv**, a TypeScript dashboard managed by **Bun**, and **paper trading by default**. The platform records production Deribit BTC USDC option markets, evaluates protected credit verticals, reserves risk before ordering, and keeps an auditable session ledger. Real execution uses a separate, explicitly armed adapter.
 
-## Why this comparison and the Objective
+This is research and evaluation software. A working pricer or backtest does not establish profitable trading. Heston, Bates and rough Bergomi are research challengers pending temporal validation. Jev starts advisory; switch on *Require Jev approval* to make it a gate.
 
-Black-Scholes assumes constant volatility and continuous price paths.
-Neither holds for BTC: volatility clusters, mean-reverts and prices move discontinuously on exchange incidents,
-regulatory news, and liquidation cascades. Heston relaxes the constant-vol
-assumption; Bates adds jumps on top. The Objective:
-**test whether option-pricing models like Heston and Bates actually explain real Bitcoin options prices better than the standard one Black-Scholes, and by how much using real market data.**
+## Container quick start
 
-## Method for Synthetic Data
+Put your TypeSafe key in `.env` (copy `.env.example`), then, with Docker Desktop running, use one command from the project folder:
 
-1. **Pricing engines** (`models/`): closed-form Black-Scholes, and
-   semi-analytic Heston / Bates pricers via characteristic-function
-   inversion (Gil-Pelaez / Heston 1993, "Little Trap" formulation for
-   numerical stability — see Albrecher et al. 2007). Both support calls
-   and puts (puts via put-call parity, verified to hold to floating-point
-   precision) and are vectorized across strikes at fixed maturity, using a
-   fixed 64-point Gauss-Legendre quadrature instead of adaptive
-   integration — this is what makes calibration run in seconds instead of
-   tens of minutes: the characteristic function is evaluated once per
-   (maturity, option type) and reused across every strike, rather than
-   re-integrated per strike per candidate parameter set.
-2. **Data** (`data.py`): a synthetic BTC options "market" generated from a
-   Bates process with realistic ground-truth parameters (high vol-of-vol,
-   negative spot-vol correlation, modest negative jump risk) plus pricing
-   noise. Quotes use OTM options only — puts below spot, calls above —
-   matching real market convention, and for a real reason: deep ITM
-   options are almost pure intrinsic value with little vega, so price->IV
-   inversion is numerically unstable there. Using a known data-generating
-   process also lets me check that calibration actually recovers sensible
-   parameters before trusting it on anything real. A template for pulling
-   live calls-and-puts data from Deribit's public API is included (see
-   "Using real data" below).
-3. **Calibration** (`calibrate.py`): each model's parameters are fit by
-   minimizing relative squared price error across the whole surface (all
-   strikes, all maturities, both option types) simultaneously — one
-   parameter set has to explain the entire smile, not just one point on
-   it. Optimization is `differential_evolution` (global search, needed
-   because the smile-fitting landscape is non-convex) followed by a
-   bounded Nelder-Mead polish.
-4. **Evaluation**: fit quality is reported as RMSE of *implied volatility*
-   (in vol points), the standard way to compare option pricing models —
-   it weights strikes fairly regardless of their raw price level.
-
-## Results (synthetic market, 21 quotes across 3 maturities, calls + puts)
-
-| Model         | IV RMSE (vol pts) |
-|---------------|-------------------|
-| Bates         | 0.13              |
-| Heston        | 1.20              |
-| Black-Scholes | 2.22              |
-
-Flat Black-Scholes is roughly 18x worse than Bates in RMSE terms, because
-it has exactly one free parameter and cannot represent a smile at all —
-see `smile_comparison.png`: it's a flat line cutting through a clearly
-downward-sloping market skew. Bates tracks the market skew almost exactly
-across all three maturities.
-
-**Two findings that were flagged:**
-
-1. **Heston's calibration converges to a boundary solution** — kappa and
-   theta both pin near their lower search bounds, and rho pins near -1,
-   *consistently*, across repeated runs with wider search budgets (so this
-   isn't an under-optimized local minimum; it's genuinely where the
-   objective is minimized given Heston's structure). This makes sense in
-   hindsight: the true market has jumps, and pure diffusion-based
-   stochastic volatility can only *approximate* a jump-driven short-dated
-   skew by pushing toward near-deterministic, highly-correlated variance
-   dynamics — an unrealistic corner of the parameter space. This is
-   exactly the empirical motivation for adding jumps in the first place
-   (Bates 1996): a real fitting exercise, not just a synthetic one, often
-   reproduces this same pattern on short-dated crypto or equity index
-   skew.
-2. **Bates' own jump parameters are still not cleanly recovered** 
-   (calibrated λ ≈ 0.20 vs. true 0.6, μⱼ ≈ -0.16 vs. true -0.06), even
-   though the *overall* price/smile fit is excellent and the diffusion
-   parameters (kappa, theta) land close to their true values. This is a
-   known identification problem in jump-diffusion calibration: stochastic
-   volatility and jump risk both add left-skew and excess kurtosis to the
-   implied distribution, so a cross-sectional snapshot of option prices
-   alone often can't cleanly separate how much of this skew is vol-of-vol
-   vs. how much is jump risk — different parameter combinations can
-   produce nearly identical option prices. Resolving it properly needs
-   either time-series data (to see actual jumps happen) or a much denser
-   strike/maturity grid.
-
-## Using real data instead of the synthetic market
-
-The project ships with a realistically synthetic generated market by default. To
-run it on a live BTC snapshot (calls and puts), on a machine with normal internet
-access:
-
-```bash
-pip install -r requirements.txt
-python3 run_on_real_data.py
+```powershell
+.\start.ps1
 ```
 
-## Limitations (Synthetic Data)
+The launcher builds Python with **uv** and the frontend with **Bun**, starts the recorder, paper trader and dashboard, waits for health checks, and opens **http://127.0.0.1:8765**. No host Python/Bun installation or Deribit credentials are needed. Only `TYPESAFE_API_KEY` is passed from `.env` to the paper worker; after editing it, run `docker compose up -d` to apply. Only `TYPESAFE_API_KEY` is passed from `.env` to the paper worker; after editing it, run `docker compose up -d` to apply. If another app uses that port, run `.\start.ps1 -Port 8787`.
 
-- Calibrated on a single snapshot in time (a "cross-section"), not a time
-  series — this is standard for model comparison but can't validate how
-  well a model *hedges* over time, only how well it fits prices today.
-- Only 3 maturities x 7 strikes. Real Deribit chains have far more — more
-  data generally stabilizes the jump-parameter identification problem
-  noted above.
-- Risk-free rate set to 0, matching Deribit's coin-margined (BTC-settled)
-  quoting convention — this differs from equity option conventions and is
-  worth calling out if presenting this alongside equity-options work.
-- Fixed 64-point quadrature trades a small amount of pricing accuracy
-  (~0.003% vs. adaptive integration, verified in testing) for a >100x
-  speedup — reasonable for calibration, but a production pricing engine
-  might want adaptive precision near expiry/strike edge cases.
+On Linux: `sh start.sh`. The portable command is `docker compose up --build -d`.
 
-## Greeks (delta, gamma, theta, vega)
+The dashboard is a mobile-first, brokerage-style app with three tabs:
 
-`greeks.py` computes all four via finite-difference bumping (nudge spot,
-time, or vol slightly and reprice), the same way for all three models —
-which shows that **Black-Scholes has closed-form Greek formulas; Heston
-and Bates don't**, because Heston alone has five vol-related parameters
-(v0, kappa, theta, sigma_v, rho), so there's no single "sigma" to
-differentiate against the way Black-Scholes has one. Bump-and-reprice is
-the standard way to get Greeks out of a model that doesn't have a closed 
-form.
+- **Portfolio**: balance with a scrubbable equity chart (1D/1W/1M/All), portfolio Greeks (IV, delta, gamma, theta, vega) and open positions. Tap a position for its legs, live Greeks and P&L, then *slide to close* (short leg first).
+- **Trade**: *Auto-trade* and *Require Jev approval* switches, and the latest ideas with the credit you receive and Jev's verdict. Tap an idea to review max loss, costs, edge, exit rules and Greeks, then *slide to execute*. The worker re-prices it on live quotes, asks Jev when approval is required, runs the independent risk check and buys protection first; a banner reports the outcome.
+- **Settings**: live connection status (Deribit, worker, Jev key from `.env`, forecast history), session limits, *slide to halt & flatten*, and an optional history CSV import.
 
-**Validated before trusting it on Heston/Bates**: I checked the
-finite-difference delta/gamma/vega against Black-Scholes' own closed-form
-formulas — they match to 9 significant figures. Theta matches to within
-0.3%, which is *expected*. The finite-difference version
-measures actual next-day P&L (including one day of curvature), while the
-closed-form formula is an instantaneous derivative — the discrete version
-is arguably the more practically useful number
+The status pill is green only for fresh **production** Deribit quotes; stale or synthetic data is labeled in amber or red.
 
-**Definitions used** (Greek conventions vary across desks — stating them
-explicitly matters more than which convention you pick):
-- delta, gamma — standard, dPrice/dS and d²Price/dS²
-- theta — Price(T − 1 day) − Price(T), holding spot fixed: expected
-  overnight time-decay P&L, in $ per day
-- vega — dPrice/d(√v0) × 0.01: price change per 1-percentage-point move in
-  the *current instantaneous vol level*. This is a specific modeling
-  choice, not the only valid one — under Heston/Bates you could equally
-  well define a "vega" with respect to θ (long-run variance) or σᵥ
-  (vol-of-vol) instead of v0. Bumping v0 was chosen because it answers the
-  question a trader usually means by vega: "if the market's current
-  implied vol moved by 1 point, how much would this option reprice?"
+Container restarts resume the same simulated account, pending orders and persistent halts. `docker compose stop` stops services; `docker compose up -d` resumes them. The container workspace uses persistent named volumes, separate from the local `runtime/` directory. The default stack is paper-only. Live remains an explicitly armed CLI option.
 
-**What the results show** (`greeks_comparison.png`): gamma and vega peak
-near the money and decay in the wings for all three models, as expected.
-The genuinely interesting divergence is that **Bates shows lower vega than
-Heston at longer maturities** — part of Bates' sensitivity to the smile's
-shape comes from its jump parameters rather than from v0, so its price
-reacts less to a pure vol-of-v0 bump for the same overall level of
-skew/smile. One visual note: delta has a visible jump exactly at
-moneyness = 1.0 in the plot — that's not a bug, it's the OTM quoting
-convention switching from put deltas (negative) to call deltas (positive)
-at that strike, consistent with put-call parity (delta_call − delta_put =
-1 at the same strike).
+Optional port and initial balance settings are also in `.env`. See [container operation](docs/CONTAINERS.md) for logs, backups, fresh sessions and key handling.
 
-## Real-data results (Deribit)
+## Local development quick start
 
-The `main.py` results above use synthetic data (this project's own sandbox
-had no network route to deribit.com). `analyze_manual_export.py` runs the
-same study on real Deribit data pulled straight from the site's own UI
-export (no API, no account, no trading history needed) — see
-`sample_data/real_exports/` for the exact files used.
+From the project root:
 
-**Study 1 — a single ~1-day expiry (30SEP26), full wide-wing set:**
-
-| Model | IV RMSE (vol pts) |
-| --- | --- |
-| Bates | 3.94 |
-| Heston | 9.35 |
-| Black-Scholes | 26.87 |
-
-This run also surfaced a genuine floating-point precision failure in the
-characteristic-function pricer at ultra-short maturities: some far-wing
-prices come back invalid, traced to the deep-ITM-call probability landing
-so close to 1 that the raw call price falls *below* its own intrinsic
-value — confirmed with much finer quadrature grids, which converged to the
-same wrong answer rather than fixing it. Restricting to a numerically
-clean near-the-money band changes the picture:
-
-| Model | IV RMSE (vol pts) |
-| --- | --- |
-| Bates | 3.55 |
-| Black-Scholes | 3.89 |
-| Heston | 6.15 |
-
-Bates only modestly beats Black-Scholes here, and Heston is worse than
-both — because a jump model's real advantage lives in the tails, exactly
-what had to be excluded on numerical grounds.
-
-**Study 2 — a full term structure, 5 real expiries (10 days to 1 year):**
-
-| Model | IV RMSE (vol pts) |
-| --- | --- |
-| Heston | 4.18 |
-| Bates | 4.21 |
-| Black-Scholes | 12.12 |
-
-Heston and Bates converge to almost the same fit here — a different,
-more structural finding than Study 1. Both get pushed to an extreme
-vol-of-vol (pinned at the search bound, and climbing even higher when the
-bound was widened to test it), which points to a single constant-parameter
-variance process struggling to reconcile a steep short-dated skew with a
-much flatter one a year out, regardless of whether jumps are included.
-
-This study also priced each expiry against its own delta-implied forward
-rather than one shared spot — BTC's forward curve carries a real
-cost-of-carry premium (about $84k near-term rising to about $95k a year
-out on the same snapshot), which `data.py`'s `load_manual_export()` /
-`load_multi_expiry()` handle automatically.
-
-**Greeks, computed on this real term structure**, showed a fourth finding:
-Black-Scholes vega comes out more than 3x larger than Heston's or Bates'
-at the long end (about 250 vs. about 85 at 178 days). The reason is mean
-reversion — a bump to the current instantaneous vol barely moves a
-long-dated option's price once a calibrated kappa around 4 has time to
-pull variance back to its long-run level, while Black-Scholes' flat sigma
-has no such decay. Concrete evidence that Heston/Bates vega is not a
-drop-in replacement for Black-Scholes vega.
-
-Run it yourself: `python3 analyze_manual_export.py` (uses the sample
-exports already in the repo; edit the file lists at the top to point at
-fresh exports for an updated snapshot).
-
-## Project structure
-
-```
-models/black_scholes.py    Closed-form pricing + implied vol inversion
-models/heston.py           Stochastic-vol pricing (vectorized, fixed quadrature)
-models/bates.py            Heston + jumps
-greeks.py                  Finite-difference delta/gamma/theta/vega (all 3 models)
-data.py                    Synthetic market generator + 2 real-data loaders
-                            (live Deribit API, and manual UI exports)
-calibrate.py                Calibration routines for all three models
-report.py                   Shared plotting/reporting used by every entry point
-main.py                     Full study on synthetic data
-run_on_real_data.py         Full study on a LIVE Deribit API pull
-analyze_manual_export.py    Full study on Deribit's UI-exported tables —
-                             both real-data findings above come from this
-sample_data/real_exports/   The exact export files used for those results
-outputs/                    Where analyze_manual_export.py writes its plots/CSVs
+```powershell
+cd frontend
+bun install --frozen-lockfile
+bun test
+bun run build
+cd ..
+uv sync --locked
+uv run btc-options doctor
+uv run btc-options validate
+uv run btc-options paper --demo --seconds 30
+uv run btc-options dashboard
 ```
 
-Run on synthetic data (works anywhere, no internet needed):
-```bash
-pip install -r requirements.txt
-python3 main.py
+Open **http://127.0.0.1:8765**. The CLI dashboard is read-only by default; add `--controls` to allow paper trade, close, halt and Jev-gate requests from the browser (the running `paper` worker consumes them). Exchange sessions never accept dashboard requests. For UI development, run the Python dashboard and `bun run dev` in `frontend`.
+
+Demo observations are synthetic and labeled. The same conservative strategy may reject all demo spreads. Tests exercise fills, partial protection, exits and recovery separately. Synthetic observations never qualify as performance evidence.
+
+## Production-data paper evaluation
+
+One command records live Deribit data over WebSocket and runs the simulated portfolio (add `--no-record` if a separate `collect` process already records into the same runtime folder). Check connectivity and your Jev key first:
+
+```powershell
+uv run btc-options doctor --network
+uv run btc-options paper --config configs/paper.toml --seconds 86400
+uv run btc-options dashboard --controls
 ```
 
-Run on live Deribit data via the API (needs internet access — won't work
-in a sandbox without egress to deribit.com):
-```bash
-pip install -r requirements.txt
-python3 run_on_real_data.py
+No Deribit trading credentials are needed. Default simulated capital is **10,000 USDC**. Save the printed session ID. Resume with `--resume SESSION_ID` and identical configuration after a restart. A new invocation starts an isolated portfolio. Keep one service writer per session. Simulated sessions cannot become real sessions.
+
+Physical forecasts require at least **60 completed days** of sufficiently covered intraday history. The worker backfills 90 days of real 5-minute BTC-PERPETUAL closes from Deribit's public chart API on start and extends them every evaluation (the perpetual tracks the index within basis points), so entries are not blocked for two months. Its own recorded BTC USDC index takes precedence where available, and imported history joins automatically. A degenerate GARCH fit (e.g. near-infinite-variance tails on a short sample) is flagged unhealthy and excluded from the forecast ensemble. An explicit updating `timestamp,price` CSV can also be supplied with `--prices history.csv`. An old static CSV alone is insufficient for forward trading: the latest price must be within 15 minutes.
+
+```powershell
+uv run btc-options import-history intraday.csv --kind prices
+uv run btc-options export-history runtime/export
+uv run btc-options backtest runtime/export/snapshots.jsonl runtime/export/underlying.csv
+uv run btc-options report SESSION_ID --output runtime/paper-report.json
 ```
 
-Reproduce the real-data results in this README exactly, using the sample
-exports already included (works anywhere, no internet needed — this is
-what actually generated the numbers above):
-```bash
-pip install -r requirements.txt
-python3 analyze_manual_export.py
+Performance replay accepts only chronological, normalized production/historical executable quotes. Manual exports lacking reliable timestamps or depth remain valuation research. Empty trade histories and missing losses produce undefined metrics, not invented win rates or profit factors.
+
+## Quantitative stack
+
+| Component | Role |
+|---|---|
+| Forward Black | Explicit forwards, discounts and premium units; prices, IV inversion, analytical Greeks; independent QuantLib checks |
+| Greeks | Delta (BTC), gamma, theta (USDC/day), vega (USDC/vol point) and IV for every leg, spread, candidate and the portfolio; risk delta/vega budgets use the same engine |
+| Extended SSVI (eSSVI) | Per-expiry skew with Hendriks–Martini calendar and Gatheral–Jacquier butterfly conditions enforced by construction; quotes weighted by bid/ask width in vol; sub-day expiries excluded; per-slice residual errors |
+| Corrected Heston / Bates | Compensated, measure-specific jump transform; bid/ask-scaled calibration, adaptive verification, holdouts and health diagnostics |
+| Physical forecasts | Equal-weight ensemble of direct multi-horizon log-HAR, HAR-X (DVOL implied variance + downside semivariance), EWMA and GJR-GARCH-t on a one-year backfill; last-day persistence is a benchmark only |
+| Rough Bergomi | Seeded hybrid Volterra simulation, antithetics and disjoint-pilot control variate; sampling and grid-refinement uncertainty |
+| Spread strategy | 14–45 day bull put/bear call verticals; .10–.20 short absolute delta; daily filtered-historical-simulation paths with a DVOL-estimated mean-reverting IV level, valued to the actual exit (take-profit, mid-value stop, time or pre-expiry exit) including exit spread and fees |
+
+Implied valuation is risk-neutral. Physical scenarios are separate; option delta is not a real-world win probability. Newer models do not automatically become trading defaults.
+
+```powershell
+uv run btc-options research runtime/latest.json --model heston
+uv run btc-options research runtime/latest.json --model bates
+uv run btc-options model-walk-forward runtime/export/snapshots.jsonl --model bates
+uv run btc-options benchmark --paths 10000 --steps 64
 ```
+
+## Risk, execution and recovery
+
+Defaults: **0.25% per trade**, **1% aggregate reserved loss**, **one spread**, **1% daily loss halt**, **10% drawdown halt**. Reservations include pending/partial positions and funded protection. Hold at most 24 hours (and exit 48 hours before expiry), take profit after capturing 50% of credit, and begin reduction when the spread's mid value reaches 2x initial credit. The candidate evaluator simulates these same exits, so a policy that cannot cover its round-trip costs produces no candidates. Triggers cannot guarantee fill prices or realized drawdown.
+
+Paper IOC limits consume subsequent executable depth after latency, including fees and partial cancellations. A touched quote does not guarantee a fill. Entry buys protection first; exit closes shorts first. Combo execution remains disabled pending independent validation; sequential protected execution is implemented.
+
+```powershell
+uv run btc-options halt SESSION_ID
+uv run btc-options recover SESSION_ID --action reconcile
+uv run btc-options recover SESSION_ID --action cancel
+uv run btc-options recover SESSION_ID --action reduce --seconds 60
+uv run btc-options settle-paper SESSION_ID runtime/last-pre-expiry-snapshot.json
+```
+
+Halts survive restarts. Keep the service running for reduction or use recovery. Exchange recovery needs `--arm` and matching credentials but forbids new exposure and does not depend on a release manifest. Settlement needs confirmed delivery history and retained expiry metadata. Exchange account discrepancies halt for audit.
+
+## Jev, testnet and live
+
+The TypeSafe adapter pins **jev-1.13.0** and rejects mutable aliases. Set `TYPESAFE_API_KEY` in `.env`; it is the only entry read from that file (re-read every loop, so edits apply live locally). An exported environment variable takes precedence. Without a key, rules-only paper remains usable. With approval off, judgments are recorded but do not change the portfolio; with approval on (or `jev_mode = "filter"`), missing, invalid, uncertain or obsolete responses map to SKIP. CLOSE is a separate advisory for existing positions. Mandatory risk management runs first. Jev cannot size, submit or authorize orders.
+
+Testnet is for exchange mechanics; its liquidity does not support performance claims. Copy the policy to separate exchange configuration, set the mode, and explicitly configure `strategy_capital`. Use a dedicated subaccount with withdrawal permissions disabled. `.env.example` documents variable names; Deribit credentials in `.env` are never auto-loaded and must be exported explicitly in the service shell.
+
+```powershell
+uv run btc-options testnet --config configs/testnet.toml --arm
+uv run btc-options release-check evidence-paths.json --config configs/live.toml
+uv run btc-options live --config configs/live.toml --arm --release runtime/release.json
+```
+
+Live requires passing evidence, explicit arming and production credentials. Release manifests bind configuration, implementation and evidence hashes, and expire after seven days. No passing live release is included. Begin with 4–8 weeks of forward paper evaluation, extending for low trade counts or insufficient regimes. See [the operations runbook](docs/OPERATIONS.md) for assumptions and gate formats.
+
+## Storage, tests and preserved studies
+
+Parquet holds versioned timestamped market envelopes and normalized snapshots; DuckDB analyzes them. Validated WebSocket books supply paper snapshots when available; public REST is a fallback and partial or stale chains cannot qualify absent sufficient valid data. SQLite WAL holds mode-isolated sessions, cash, positions, reservations, orders, idempotent fills, settlements and decision events. Runtime data and secrets are ignored by Git. The dashboard serves from loopback, opens the ledger read-only and only queues paper requests for the worker. Build the Bun assets before packaging Python; wheels bundle the dashboard.
+
+The original standalone Black-Scholes/Heston/Bates study scripts were retired; their fast Heston/Bates engine lives on as `btc_options.structural` and the research commands above. They remain in git history before this cleanup. `sample_data/real_exports` keeps the raw Deribit UI exports.
+
+Windows/Linux Python tests and wheel builds, plus Bun tests and builds, are configured in `.github/workflows/check.yml`. Local validation does not imply remote CI has run.
+
+## Primary references checked 2 October 2026
+
+- [Deribit USDC options](https://support.deribit.com/hc/en-us/articles/31424932728093-Linear-USDC-Options), [data collection](https://docs.deribit.com/articles/options-data-collection-best-practices), [testnet](https://support.deribit.com/hc/en-us/articles/28685393662365-Deribit-Testnet), [fees](https://support.deribit.com/hc/en-us/articles/25944746248989-Fees).
+- [SSVI constraints](https://arxiv.org/abs/1204.0646), [QuantLib Bates reference](https://github.com/lballabio/QuantLib/blob/master/ql/pricingengines/vanilla/batesengine.cpp).
+- [TypeSafe models](https://docs.typesafe.ai/models), [API](https://docs.typesafe.ai/api), [Jev limitations](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
+
+Model recency alone is not superiority. This project provides reproducible evaluation and makes no claim to a universally best BTC trading model or guaranteed returns.
