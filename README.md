@@ -20,6 +20,20 @@ git push -u origin main
 2. In the cloned project folder, copy `.env.example` to `.env` and set `TYPESAFE_API_KEY` if you want Jev-enabled paper mode.
 3. Start the stack with Docker (`.\start.ps1` on Windows, `sh start.sh` on Linux).
 
+## Live hosting on Render (GitHub auto-deploy)
+
+This repository includes a Render Blueprint service config at `/render.yaml` and a deploy workflow at `/.github/workflows/deploy-render.yml`.
+
+1. Push this repository to GitHub (branch `main`).
+2. In Render, create a **Web Service** from this repo using the Blueprint (`render.yaml`).
+3. In Render service settings, set `TYPESAFE_API_KEY` (optional; leave empty for rules-only paper mode).
+4. In Render service settings, create a **Deploy Hook** and copy its URL.
+5. In GitHub repository settings, add secret `RENDER_DEPLOY_HOOK_URL` with that URL.
+6. Push to `main` (or run the **Deploy to Render** workflow manually) to trigger deployment.
+
+After deploy, open your Render URL and check `/api/health`.
+The hosted container runs collector + paper worker + dashboard in one service and persists runtime state on the `/data` disk.
+
 ## Container quick start
 
 Put your TypeSafe key in `.env` (copy `.env.example`), then, with Docker Desktop running, use one command from the project folder:

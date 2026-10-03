@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: btc-options-platform
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerCommand: >
+      sh -lc "python -m btc_options.container collector &
+      python -m btc_options.container paper &
+      exec python -m btc_options.container dashboard"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: btc-paper-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: BTC_RUNTIME_DIR
+        value: /data
+      - key: BTC_PAPER_BALANCE
+        value: "10000"
+      - key: TYPESAFE_API_KEY
+        sync: false
